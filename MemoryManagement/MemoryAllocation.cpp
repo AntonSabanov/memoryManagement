@@ -62,10 +62,10 @@ public:
 		// если следующая страница уже создана, то переходим в нее и ищем там
 
 		auto currentFreeBlock = (char*)currentPage->headFL + sizeof(int); //адрес текущего пустого блока с учетом индекса предыдущего (часть с данными в блоке)
-		auto currentNextIndex = currentPage->headFL->nextFreeBlockIndex; //индекс следующего блока после текущего
+		int currentNextIndex = currentPage->headFL->nextFreeBlockIndex; //индекс следующего блока после текущего
 		currentPage->headFL = (BlockHeader*)((char*)currentPage + (currentNextIndex * blockSize) + blockSize);// переход на указателя на следующий свободный блок по его индексу (указатель без учета индекса след эл.)
-		currentPage->headFL->nextFreeBlockIndex = ++currentNextIndex;
-
+		
+		//currentPage->headFL->nextFreeBlockIndex = ++currentNextIndex;
 		//auto index2 = ((char*)currentPage->headFL - (char*)currentPage) / blockSize - 1; // расчет индекса текущего свободного элемента
 
 		return currentFreeBlock;
@@ -85,7 +85,11 @@ public:
 			PAGESIZE,
 			MEM_COMMIT,			//инициализирует страницу в ранее зарезервированную область
 			PAGE_READWRITE);
+#ifdef _DEBUG
 		assert(newPage != NULL); // проверка на инициализацию страницы
+#endif // DEBUG	
+
+
 		return newPage;
 	}
 
@@ -104,7 +108,18 @@ public:
 			
 		currentPage->headFL = (BlockHeader*)((char*)currentPage + blockSize); // смещение указателя на первый свободный блок без учета индекса след. эл.	
 		//currentPage->headFL->currentBlockIndex = 0; //индекс текущего блока
-		currentPage->headFL->nextFreeBlockIndex++; //индекс следующего свободного блока
+		//currentPage->headFL->nextFreeBlockIndex++; //индекс следующего свободного блока
+		
+		// инициализация заголовков блоков 
+		auto temp = currentPage->headFL;
+		int i = 1;
+		while ((char*)temp < (char*)currentPage + PAGESIZE - blockSize) 
+		{
+			temp->nextFreeBlockIndex = i;
+			i++;
+			temp = (BlockHeader*)((char*)temp + blockSize);
+		}
+		temp->nextFreeBlockIndex = -1; // последний блок не имеет следующего
 	}
 };
 
@@ -217,7 +232,7 @@ public:
 				&& (char*)p < (char*)curPage + PAGESIZE)
 				//&& ((char*)p - (char*)curPage) % alloc16.blockSize == 0) // проверка на попадание в интервал и на выравнивание по размерам ячеек
 			{
-				alloc16.SetFreeBlock(p);
+				alloc16.SetFreeBlock(p); // помещаем ячейку в голову списка
 				break;
 			}
 			else

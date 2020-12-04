@@ -21,6 +21,10 @@ TEST(Test, Test)
 	EXPECT_EQ(*p2, 7);
 	EXPECT_EQ(*p3, 3);
 	allocator.Free(p2);
+	int *p4 = (int*)allocator.Alloc(sizeof(int));
+	*p4 = 8;
+	int *p5 = (int*)allocator.Alloc(sizeof(int));
+	*p5 = 9;
 	//EXPECT_EQ(*p2, 7);
 	EXPECT_TRUE(true);
 }
