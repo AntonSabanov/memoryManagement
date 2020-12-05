@@ -1,12 +1,12 @@
 #include "pch.h"
 #include "../MemoryManagement/MemoryAllocation.cpp"
 
-TEST(TestCaseName, TestName) 
-{
-  EXPECT_EQ(1, 1);
-  EXPECT_TRUE(true);
-}
-
+//TEST(TestCaseName, TestName) 
+//{
+//  EXPECT_EQ(1, 1);
+//  EXPECT_TRUE(true);
+//}
+//
 //TEST(Test, Test) 
 //{
 //	MemoryAllocator allocator;
@@ -29,19 +29,36 @@ TEST(TestCaseName, TestName)
 //	EXPECT_TRUE(true);
 //}
 
-TEST(Test1, Test)
+//TEST(Test1, Test)
+//{
+//	MemoryAllocator allocator;
+//	allocator.Init();
+//	for (int i = 0; i < 254; i++)
+//	{
+//		int *p = (int*)allocator.Alloc(sizeof(int));
+//		*p = i;
+//	}
+//	int *p = (int*)allocator.Alloc(sizeof(int));
+//	*p = 3;
+//	EXPECT_EQ(*p, 3);
+//	allocator.Free(p);
+//	*p = 7;
+//	EXPECT_EQ(*p, 7);
+//}
+
+TEST(Test2, Test)
 {
 	MemoryAllocator allocator;
 	allocator.Init();
-	//int *p = (int*)allocator.Alloc(sizeof(int));
-	//*p = 1;
-	for (int i = 0; i < 255; i++)
+	for (int i = 0; i < 254; i++)
 	{
 		int *p = (int*)allocator.Alloc(sizeof(int));
 		*p = i;
 	}
-	int *p = (int*)allocator.Alloc(sizeof(int));
-
-	//EXPECT_EQ(*p2, 7);
-	EXPECT_TRUE(true);
+	int *p = (int*)allocator.Alloc(32);
+	*p = 3;
+	EXPECT_EQ(*p, 3);
+	allocator.Free(p);
+	*p = 7;
+	EXPECT_EQ(*p, 7);
 }
