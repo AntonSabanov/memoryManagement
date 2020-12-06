@@ -4,6 +4,7 @@
 #include "windows.h"
 
 #define PAGESIZE 4096
+#define MEGABYTE 1024*1024
 
 class FixedSizeAllocator //Page
 {
@@ -37,67 +38,13 @@ public:
 		{
 			DestoyFSA();
 		}
-		//если дестрой не был вызван, то выполнить очитску
-//		PageHeader* tempPage = mainPage;
-//		bool isReleased = false;
-//		while (tempPage->nextPage != nullptr)
-//		{
-//			PageHeader* tempNextPage = tempPage->nextPage;
-//			isReleased = VirtualFree(
-//				(LPVOID)tempPage,
-//				0,
-//				MEM_RELEASE);
-//
-//#ifdef _DEBUG
-//			assert(isReleased);  // проверка на освобождение
-//#endif // DEBUG		
-//
-//			tempPage = tempNextPage;
-//		}
-//
-//		if (tempPage != nullptr)
-//		{
-//			isReleased = VirtualFree(
-//				(LPVOID)tempPage,
-//				0,
-//				MEM_RELEASE);
-//
-//#ifdef _DEBUG
-//			assert(isReleased);  // проверка на освобождение
-//#endif // DEBUG	
-//		}
 	}
 
 	void InitFSA()
 	{
-		mainPage = AddNewPage();
-		//auto newPage = AddNewPage();
-		//if (mainPage == nullptr)
-		//{
-		//	mainPage = newPage;
-		//	mainPage->nextPage = nullptr;
-		//}			
-		//else
-		//{
-		//	mainPage->nextPage = newPage;
-		//}
-
-		mainPage->headFL = (BlockHeader*)((char*)mainPage + blockSize);	// смещение указателя на первый свободный блок без учета индекса след. эл.	
-
-		//mainPage->headFL->currentBlockIndex = 0; //индекс текущего блока
-		//mainPage->headFL->nextFreeBlockIndex++; //индекс следующего свободного блока
-
+		mainPage = AddNewPage(); // выделение страницы и инициализация аллокатора
+		mainPage->headFL = (BlockHeader*)((char*)mainPage + blockSize);	// смещение указателя на первый свободный блок без учета индекса след. эл.
 		BlockHeadersInit(mainPage);	// инициализация заголовков блоков 
-
-		//auto temp = mainPage->headFL;
-		//int i = 1;
-		//while ((char*)temp < (char*)mainPage + PAGESIZE - blockSize) 
-		//{
-		//	temp->nextFreeBlockIndex = i;
-		//	i++;
-		//	temp = (BlockHeader*)((char*)temp + blockSize);
-		//}
-		//temp->nextFreeBlockIndex = -1; // последний блок не имеет следующего
 	}
 
 	void DestoyFSA() //вызов АллокФри для аллокатора
@@ -129,9 +76,9 @@ public:
 #ifdef _DEBUG
 			assert(isReleased);  // проверка на освобождение
 #endif // DEBUG	
-
-			isInit = false; //аллокатор деинициализирован
 		}
+
+		isInit = false; //аллокатор деинициализирован
 	}
 
 	void* GetFreeBlock()
@@ -253,6 +200,21 @@ public:
 		temp->nextFreeBlockIndex = -1; // последний блок не имеет следующего
 		blocksCount++;
 	}
+
+	bool IsAllocatorContainPointer(void* p)
+	{
+		auto currentPage = mainPage;
+		bool isContaine = false;
+		while (currentPage != nullptr)
+		{
+			if ((char*)p > (char*)currentPage && (char*)p < (char*)currentPage + PAGESIZE)
+			{
+				isContaine = true;
+			}
+			currentPage = currentPage->nextPage;
+		}	
+		return isContaine;
+	}
 };
 
 class CoalesceAllocator
@@ -287,7 +249,10 @@ public:
 
 	~CoalesceAllocator()
 	{
-		//
+		if (isInit == true) //если аллокатор не был деинициализирован вручную
+		{
+			DestoyCA();
+		}
 	}
 
 	void InitCA()
@@ -296,8 +261,6 @@ public:
 		mainPage->headFL = (BlockHeader*)((char*)mainPage + sizeof(PageHeader));	// смещение указателя на первый свободный блок (сдвиг на велечину заголовка страницы)	
 		mainPage->headFL->blockSize = pageSize - sizeof(PageHeader); // размер первого блока с учетом метаданных блока и без учета заголовка страницы
 		mainPage->headFL->isFree = true;
-		//mainPage->headFL->nextFreeBlockIndex++; //индекс следующего свободного блока
-		//BlockHeadersInit(mainPage);	// инициализация заголовков блоков 
 	}
 
 	PageHeader* AddNewPage()
@@ -316,11 +279,6 @@ public:
 
 		return newPage;
 	}
-
-	//void BlockHeadersInit(PageHeader* page)
-	//{
-		//
-	//}
 
 	void DestoyCA()
 	{
@@ -345,9 +303,10 @@ public:
 #ifdef _DEBUG
 			assert(isReleased);  // проверка на освобождение
 #endif // DEBUG	
-
-			isInit = false; //аллокатор деинициализирован
+		
 		}
+
+		isInit = false; //аллокатор деинициализирован
 	}
 
 	void* FindFreeBlock(PageHeader* page, size_t dataSize) // выделение свободного блока и установка связей между блоками
@@ -393,7 +352,7 @@ public:
 					page->headFL = newBlock; //переопределяем голову в новый, образовавшийся в ходе разделения блок
 				}
 
-				returnedFreeBlock = (char*)currentFreeBlock + sizeof(BlockHeader);
+				returnedFreeBlock = (char*)currentFreeBlock + sizeof(BlockHeader);//возвращемый блок без служебной инфы
 				break;
 			}
 			else // если данные не помещаются в блок
@@ -463,6 +422,7 @@ public:
 				{
 					auto newPage = AddNewPage(); //добавляем новую страницу
 					newPage->headFL = (BlockHeader*)((char*)mainPage + sizeof(PageHeader)); //добавляем голову списка в новую страницу
+					newPage->headFL->blockSize = pageSize - sizeof(PageHeader);
 					currentPage->nextPage = newPage; //записываем новую страницу в next для текущей страницы	
 					currentPage = newPage; // переходим в новую страницу и ищем там
 				}
@@ -513,14 +473,82 @@ public:
 		//return currentFreeBlock;
 	}
 
-	void SetFreeBlock(void *p)
+	void SetFreeBlock(PageHeader* page, void *p) //page это страница в которой был найден указатель
 	{
-		//
+		auto currentPage = page;
+
+		BlockHeader* currentBlock = (BlockHeader*)((char*)p - sizeof(BlockHeader)); // переходим в метаданные блока
+		if (currentBlock->prevBlock !=nullptr && currentBlock->prevBlock->isFree)//если сободен сосед слева
+		{
+			auto leftBlock = currentBlock->prevBlock; //сосед слева
+			leftBlock->nextBlock = currentBlock->nextBlock;//
+			if (currentBlock->nextBlock != nullptr)
+				currentBlock->nextBlock->prevBlock = leftBlock;//
+			leftBlock->blockSize += currentBlock->blockSize;
+			currentBlock = leftBlock;
+		}
+
+		if (currentBlock->nextBlock != nullptr && currentBlock->nextBlock->isFree)
+		{
+			auto rightBlock = currentBlock->nextBlock; //сосед справа
+			currentBlock->nextBlock = rightBlock->nextBlock; //следующий блок для текущего
+			if (rightBlock->nextBlock != nullptr)
+				rightBlock->nextBlock->prevBlock = currentBlock; //предыдущий блок для следующего
+			currentBlock->blockSize += rightBlock->blockSize;
+
+			currentBlock->nextFreeBlock = rightBlock->nextFreeBlock;
+			currentBlock->prevFreeBlock = rightBlock->prevFreeBlock;
+			if (currentPage->headFL == rightBlock)
+			{
+				currentPage->headFL = currentBlock;
+			}
+		}
+
+		if (currentBlock->nextBlock != nullptr && currentBlock->prevBlock != nullptr && currentBlock->nextBlock->isFree == false && currentBlock->prevBlock->isFree == false 
+			|| currentBlock->nextBlock == nullptr && currentBlock->prevBlock != nullptr && currentBlock->prevBlock->isFree == false
+			|| currentBlock->nextBlock != nullptr && currentBlock->prevBlock == nullptr && currentBlock->nextBlock->isFree == false)
+		{
+			if (currentPage->headFL != nullptr)
+				currentPage->headFL->prevFreeBlock = currentBlock;
+			currentBlock->nextFreeBlock = currentPage->headFL;
+			currentBlock->prevFreeBlock = nullptr;
+			currentPage->headFL = currentBlock;
+		}		
 	}
 
 	size_t GetPageSize()
 	{
 		return pageSize;
+	}
+
+	//bool IsAllocatorContainPointer(void* p)
+	//{
+	//	auto currentPage = mainPage;
+	//	bool isContaine = false;
+	//	while (currentPage != nullptr)
+	//	{
+	//		if ((char*)p > (char*)currentPage && (char*)p < (char*)currentPage + pageSize)
+	//		{
+	//			isContaine = true;
+	//		}
+	//		currentPage = currentPage->nextPage;
+	//	}
+	//	return isContaine;
+	//}
+
+	PageHeader* IsAllocatorContainPointer(void* p)
+	{
+		auto currentPage = mainPage;
+		//bool isContaine = false;
+		while (currentPage != nullptr)
+		{
+			if ((char*)p > (char*)currentPage && (char*)p < (char*)currentPage + pageSize)
+			{
+				break;
+			}
+			currentPage = currentPage->nextPage;
+		}
+		return currentPage;
 	}
 };
 
@@ -537,7 +565,8 @@ public:
 
 	bool isInit = false;
 
-	//LPVOID page = NULL;
+	LPVOID OS_mainPage = NULL; //страница запрошенная непосредственно у ОС
+	LPVOID OS_nextPage = NULL;
 
 	MemoryAllocator() : alloc16(16 * sizeof(char)),			//Создает неинициализированный аллокатор
 						alloc32(32 * sizeof(char)),
@@ -557,6 +586,12 @@ public:
 		{
 			Destroy();
 		}
+
+		//OS_mainPage = VirtualAlloc(
+		//	OS_mainPage,
+		//	PAGESIZE,
+		//	MEM_RESERVE,			//резервирует память
+		//	PAGE_READWRITE);
 	}
 
 	virtual void Init()			//Выполняет инициализацию аллокатора, запрашивая необходимые страницы памяти у ОС
@@ -570,13 +605,14 @@ public:
 		alloc512.InitFSA();
 		////////////////////
 		coalAlloc.InitCA();
-		isInit = true; //аллокатор проинициализирован
-
-		//VirtualAlloc(
-		//	page,
+		
+		//OS_mainPage = VirtualAlloc(
+		//	NULL,
 		//	PAGESIZE,
 		//	MEM_COMMIT,			//инициализирует страницу в ранее зарезервированную область
 		//	PAGE_READWRITE);
+
+		isInit = true; //аллокатор проинициализирован
 	}
 
 	virtual void Destroy()
@@ -639,70 +675,94 @@ public:
 		}
 		else if (size > (1024 * 1024 * 10) - CA_metaDataSize) //больше 10 Мбайт
 		{
-			auto newPage = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);
+			OS_mainPage = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);
 
 #ifdef _DEBUG
-			assert(newPage != NULL);	// проверка на инициализацию страницы
+			assert(OS_mainPage != NULL);	// проверка на инициализацию страницы
 #endif // DEBUG	
 
-			return newPage;
+			return OS_mainPage;
 		}
 	}
 
 	virtual void Free(void *p)
 	{
-		//auto curPage = alloc16.mainPage;
-		//while (curPage != nullptr)
-		//{
-		//	if ((char*)p > (char*)curPage && (char*)p < (char*)curPage + PAGESIZE)
-		//		//&& ((char*)p - (char*)curPage) % alloc16.blockSize == 0) // проверка на попадание в интервал и на выравнивание по размерам ячеек
-		//	{
-		//		//alloc16.SetFreeBlock(curPage, p); // помещаем ячейку в голову списка
-		//		alloc16.SetFreeBlock(p); // помещаем ячейку в голову списка
-		//		break;
-		//	}
-		//	else
-		//	{
-		//		curPage = curPage->nextPage;
-		//	}
-		//}
-		
 		if (isInit == false) // если аллокаторы не были проинициализированны 
 		{
 			return;
 		}
 		
 		//вызов в зависимости от аллокатора
-		if ((char*)p > (char*)alloc16.mainPage && (char*)p < (char*)alloc16.mainPage + PAGESIZE)
+		if (alloc16.IsAllocatorContainPointer(p))
 		{
 			alloc16.SetFreeBlock(p);
 		}
-		else if ((char*)p > (char*)alloc32.mainPage && (char*)p < (char*)alloc32.mainPage + PAGESIZE)
+		else if (alloc32.IsAllocatorContainPointer(p))
 		{
 			alloc32.SetFreeBlock(p);
 		}
-		else if ((char*)p > (char*)alloc64.mainPage && (char*)p < (char*)alloc64.mainPage + PAGESIZE)
+		else if (alloc64.IsAllocatorContainPointer(p))
 		{
 			alloc64.SetFreeBlock(p);
 		}
-		else if ((char*)p > (char*)alloc128.mainPage && (char*)p < (char*)alloc128.mainPage + PAGESIZE)
+		else if (alloc128.IsAllocatorContainPointer(p))
 		{
 			alloc128.SetFreeBlock(p);
 		}
-		else if ((char*)p > (char*)alloc256.mainPage && (char*)p < (char*)alloc256.mainPage + PAGESIZE)
+		else if (alloc256.IsAllocatorContainPointer(p))
 		{
 			alloc256.SetFreeBlock(p);
 		}
-		else if ((char*)p > (char*)alloc512.mainPage && (char*)p < (char*)alloc512.mainPage + PAGESIZE)
+		else if (alloc512.IsAllocatorContainPointer(p))
 		{
 			alloc512.SetFreeBlock(p);
 		}
-		else if ((char*)p > (char*)coalAlloc.mainPage && (char*)p < (char*)coalAlloc.mainPage + coalAlloc.GetPageSize())
+		else 
 		{
-			coalAlloc.SetFreeBlock(p);
+			auto page = coalAlloc.IsAllocatorContainPointer(p);
+			if (page != nullptr)
+			{
+				coalAlloc.SetFreeBlock(page, p);
+				return;
+			}			
 		}
-		else return;/////
 
+//		if ((char*)p > (char*)alloc16.mainPage && (char*)p < (char*)alloc16.mainPage + PAGESIZE)
+//		{
+//			alloc16.SetFreeBlock(p);
+//		}
+//		else if ((char*)p > (char*)alloc32.mainPage && (char*)p < (char*)alloc32.mainPage + PAGESIZE)
+//		{
+//			alloc32.SetFreeBlock(p);
+//		}
+//		else if ((char*)p > (char*)alloc64.mainPage && (char*)p < (char*)alloc64.mainPage + PAGESIZE)
+//		{
+//			alloc64.SetFreeBlock(p);
+//		}
+//		else if ((char*)p > (char*)alloc128.mainPage && (char*)p < (char*)alloc128.mainPage + PAGESIZE)
+//		{
+//			alloc128.SetFreeBlock(p);
+//		}
+//		else if ((char*)p > (char*)alloc256.mainPage && (char*)p < (char*)alloc256.mainPage + PAGESIZE)
+//		{
+//			alloc256.SetFreeBlock(p);
+//		}
+//		else if ((char*)p > (char*)alloc512.mainPage && (char*)p < (char*)alloc512.mainPage + PAGESIZE)
+//		{
+//			alloc512.SetFreeBlock(p);
+//		}
+//		else if ((char*)p > (char*)coalAlloc.mainPage && (char*)p < (char*)coalAlloc.mainPage + coalAlloc.GetPageSize())
+//		{
+//			coalAlloc.SetFreeBlock(p);
+//		}
+//		else
+//		{
+//			bool isReleased = VirtualFree((LPVOID)p, 0, MEM_RELEASE);
+//
+//#ifdef _DEBUG
+//			assert(isReleased);  // проверка на освобождение
+//#endif // DEBUG	
+//		}
 	}
 
 
