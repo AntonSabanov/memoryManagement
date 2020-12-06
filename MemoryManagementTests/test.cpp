@@ -46,19 +46,29 @@
 //	EXPECT_EQ(*p, 7);
 //}
 
-TEST(Test2, Test)
+//TEST(Test2, Test)
+//{
+//	MemoryAllocator allocator;
+//	allocator.Init();
+//	for (int i = 0; i < 254; i++)
+//	{
+//		int *p = (int*)allocator.Alloc(sizeof(int));
+//		*p = i;
+//	}
+//	int *p = (int*)allocator.Alloc(32);
+//	*p = 3;
+//	EXPECT_EQ(*p, 3);
+//	allocator.Free(p);
+//	*p = 7;
+//	EXPECT_EQ(*p, 7);
+//}
+
+TEST(CoalesceAllocatorTest, Test1)
 {
 	MemoryAllocator allocator;
-	allocator.Init();
-	for (int i = 0; i < 254; i++)
-	{
-		int *p = (int*)allocator.Alloc(sizeof(int));
-		*p = i;
-	}
-	int *p = (int*)allocator.Alloc(32);
-	*p = 3;
-	EXPECT_EQ(*p, 3);
-	allocator.Free(p);
-	*p = 7;
-	EXPECT_EQ(*p, 7);
+	allocator.Init();	
+	int *p = (int*)allocator.Alloc(1024*1024*5);
+	*p = 1024 * 1024;
+	EXPECT_EQ(*p, 1024 * 1024);
+	//allocator.Free(p);
 }
