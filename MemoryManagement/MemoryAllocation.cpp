@@ -1,10 +1,23 @@
 #include "pch.h"
-//#include <iostream>
+#include <iostream>
 #include "cassert"
 #include "windows.h"
 
 #define PAGESIZE 4096
 #define MEGABYTE 1024*1024
+
+enum AllocatorType
+{
+	Uncalled = 0,
+	FSA16 = 1,
+	FSA32 = 2,
+	FSA64 = 3,
+	FSA128 = 4,
+	FSA256 = 5,
+	FSA512 = 6,
+	CA = 7,
+	OS = 8
+};
 
 class FixedSizeAllocator //Page
 {
@@ -24,12 +37,15 @@ public:
 	size_t blockSize;
 	PageHeader* mainPage = nullptr;
 	bool isInit = false;
-	int blocksCount = 0;
 
+	int blocksCount;
+	int freeBlocksCount;
 
 	FixedSizeAllocator(size_t blockSize)
 	{	
 		this->blockSize = blockSize;
+		blocksCount = 0;
+		freeBlocksCount = 0;
 	}
 
 	~FixedSizeAllocator()
@@ -44,7 +60,7 @@ public:
 	{
 		mainPage = AddNewPage(); // выделение страницы и инициализация аллокатора
 		mainPage->headFL = (BlockHeader*)((char*)mainPage + blockSize);	// смещение указателя на первый свободный блок без учета индекса след. эл.
-		BlockHeadersInit(mainPage);	// инициализация заголовков блоков 
+		BlockHeadersInit(mainPage);	// инициализация заголовков блоков и количества всех блоков
 	}
 
 	void DestoyFSA() //вызов АллокФри для аллокатора
@@ -77,6 +93,8 @@ public:
 			assert(isReleased);  // проверка на освобождение
 #endif // DEBUG	
 		}
+		blocksCount = 0;
+		freeBlocksCount = 0;
 
 		isInit = false; //аллокатор деинициализирован
 	}
@@ -136,6 +154,8 @@ public:
 		//	BlockHeadersInit(newPage);												//инициализируем блоки в новой странице
 		//	currentPage->nextPage = newPage;										//записываем новую страницу в next для текущей страницы		
 		//}
+		
+		freeBlocksCount--; //уменьшение количества свободных блоков
 
 		return currentFreeBlock;
 	}
@@ -153,6 +173,9 @@ public:
 				auto currentBlockindex = ((char*)curPage->headFL - (char*)curPage) / blockSize - 1;	// расчет индекса текущего свободного элемента
 				curPage->headFL = (BlockHeader*)((char*)p - sizeof(int));
 				curPage->headFL->nextFreeBlockIndex = currentBlockindex;
+
+				freeBlocksCount++; // увеличение количества свободных блоков
+
 				break;
 			}
 			else
@@ -195,10 +218,13 @@ public:
 			temp->nextFreeBlockIndex = i;
 			i++;
 			temp = (BlockHeader*)((char*)temp + blockSize);
-			blocksCount++; // подсчет количества блоков всего
+			//blocksCount++; // подсчет количества блоков всего
 		}
 		temp->nextFreeBlockIndex = -1; // последний блок не имеет следующего
-		blocksCount++;
+		//blocksCount++;
+
+		blocksCount += i; // количество блоков в аллокаторе всего
+		freeBlocksCount += blocksCount; // количество свободных блоков в аллокаторе всего
 	}
 
 	bool IsAllocatorContainPointer(void* p)
@@ -215,6 +241,19 @@ public:
 		}	
 		return isContaine;
 	}
+
+#ifdef _DEBUG
+	const int GetFreeBlocksCount() const
+	{
+		return freeBlocksCount;
+	}
+
+	const int GetAllBlocksCount() const
+	{
+		return blocksCount;
+	}
+#endif//DEBUG	
+
 };
 
 class CoalesceAllocator
@@ -540,7 +579,7 @@ public:
 	//	return isContaine;
 	//}
 
-	PageHeader* IsAllocatorContainPointer(void* p)
+	PageHeader* IsAllocatorContainPointer(void* p) // определяет, находится ли указатель в данном аллокаторе и если да, то возвращет страницу, в которой он находится
 	{
 		auto currentPage = mainPage;
 		//bool isContaine = false;
@@ -572,6 +611,10 @@ public:
 	LPVOID OS_mainPage = NULL; //страница запрошенная непосредственно у ОС
 	LPVOID OS_nextPage = NULL;
 
+#ifdef _DEBUG
+	AllocatorType currentAllocatorType = Uncalled;	// метод какого аллокатора был вызван
+#endif//DEBUG	
+
 	MemoryAllocator() : alloc16(16 * sizeof(char)),			//Создает неинициализированный аллокатор
 						alloc32(32 * sizeof(char)),
 						alloc64(64 * sizeof(char)), 
@@ -582,7 +625,6 @@ public:
 	{
 		isInit = false;	// аллокатор не инициализирован
 	}
-
 
 	virtual ~MemoryAllocator() 
 	{
@@ -639,11 +681,11 @@ public:
 
 	virtual void* Alloc(size_t size)
 	{
-		if (isInit == false) // если аллокаторы не были проинициализированны 
-		{
-			assert(isInit);
+		//if (isInit == false) // если аллокаторы не были проинициализированны 
+		//{
+		assert(isInit);
 			//return nullptr;
-		}
+		//}
 
 		size_t FSA_metaDataSize = 1 * sizeof(int); // размер метаданных в каждом блоке для FSA аллокатора
 		size_t CA_metaDataSize = sizeof(CoalesceAllocator::BlockHeader); // размер метаданных в блоке для CA аллокатора
@@ -651,85 +693,143 @@ public:
 		//вызов в зависимости от аллокатора
 		if (size <= 16 - FSA_metaDataSize) // меньше 12 байт с учетом служебных данных в блоке
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA16;
+#endif//DEBUG			
 			return alloc16.GetFreeBlock();
 		}		
 		else if (size > 16 - FSA_metaDataSize && size <= 32 - FSA_metaDataSize) //от 12 до 28 байт
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA32;
+#endif//DEBUG				
 			return alloc32.GetFreeBlock();
 		}	
 		else if (size > 32 - FSA_metaDataSize && size <= 64 - FSA_metaDataSize) //от 28 до 60 байт
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA64;
+#endif//DEBUG			
 			return alloc64.GetFreeBlock();
 		}		
 		else if (size > 64 - FSA_metaDataSize && size <= 128 - FSA_metaDataSize) //от 60 до 124 байт
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA128;
+#endif // DEBUG	
 			return alloc128.GetFreeBlock();
 		}	
 		else if (size > 128 - FSA_metaDataSize && size <= 256 - FSA_metaDataSize) //от 124 до 254 байт
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA256;
+#endif//DEBUG	
 			return alloc256.GetFreeBlock();
 		}
 		else if (size > 256 - FSA_metaDataSize && size <= 512 - FSA_metaDataSize) //от 254 до 508 байт
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA512;
+#endif//DEBUG	
 			return alloc512.GetFreeBlock();
 		}
 		else if (size > 512 - FSA_metaDataSize && size <= (1024 * 1024 * 10) - CA_metaDataSize) //от 506 байт до 10 Мбайт
 		{
-			return coalAlloc.GetFreeBlock(size); //возврат памяти вделенной коалес аллокатором
+#ifdef _DEBUG
+			currentAllocatorType = CA;
+#endif//DEBUG	
+			return coalAlloc.GetFreeBlock(size); //возврат памяти выделенной коалес аллокатором
 		}
 		else if (size > (1024 * 1024 * 10) - CA_metaDataSize) //больше 10 Мбайт
 		{
 			OS_mainPage = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);
-
 #ifdef _DEBUG
+			currentAllocatorType = OS;
 			assert(OS_mainPage != NULL);	// проверка на инициализацию страницы
-#endif // DEBUG	
-
+#endif//DEBUG	
 			return OS_mainPage;
 		}
 	}
 
 	virtual void Free(void *p)
 	{
-		if (isInit == false) // если аллокаторы не были проинициализированны 
-		{
-			return;
-		}
+		//if (isInit == false) // если аллокаторы не были проинициализированны 
+		//{
+		//	return;
+		//}
+		assert(isInit);
 		
 		//вызов в зависимости от аллокатора
+		auto page = coalAlloc.IsAllocatorContainPointer(p);
+		if (page != nullptr)
+		{
+#ifdef _DEBUG
+			currentAllocatorType = CA;
+#endif//DEBUG	
+			coalAlloc.SetFreeBlock(page, p);
+			return;	
+		}
+
 		if (alloc16.IsAllocatorContainPointer(p))
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA16;
+#endif//DEBUG
 			alloc16.SetFreeBlock(p);
 		}
 		else if (alloc32.IsAllocatorContainPointer(p))
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA32;
+#endif//DEBUG
 			alloc32.SetFreeBlock(p);
 		}
 		else if (alloc64.IsAllocatorContainPointer(p))
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA64;
+#endif//DEBUG
 			alloc64.SetFreeBlock(p);
 		}
 		else if (alloc128.IsAllocatorContainPointer(p))
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA128;
+#endif//DEBUG
 			alloc128.SetFreeBlock(p);
 		}
 		else if (alloc256.IsAllocatorContainPointer(p))
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA256;
+#endif//DEBUG
 			alloc256.SetFreeBlock(p);
 		}
 		else if (alloc512.IsAllocatorContainPointer(p))
 		{
+#ifdef _DEBUG
+			currentAllocatorType = FSA512;
+#endif//DEBUG
 			alloc512.SetFreeBlock(p);
 		}
-		else 
+		//else 
+		//{
+		//	auto page = coalAlloc.IsAllocatorContainPointer(p);
+		//	if (page != nullptr)
+		//	{
+		//		coalAlloc.SetFreeBlock(page, p);
+		//		return;
+		//	}			
+		//}
+		else
 		{
-			auto page = coalAlloc.IsAllocatorContainPointer(p);
-			if (page != nullptr)
-			{
-				coalAlloc.SetFreeBlock(page, p);
-				return;
-			}			
+			bool isReleased = VirtualFree((LPVOID)p, 0, MEM_RELEASE);
+#ifdef _DEBUG
+			currentAllocatorType = OS;
+			assert(isReleased);  // проверка на освобождение
+#endif // DEBUG	
 		}
+
 
 //		if ((char*)p > (char*)alloc16.mainPage && (char*)p < (char*)alloc16.mainPage + PAGESIZE)
 //		{
@@ -771,9 +871,20 @@ public:
 
 
 #ifdef _DEBUG
+	AllocatorType GetCurrentAllocatorType()
+	{
+		return currentAllocatorType;
+	}
+
 	virtual void DumpStat() const
 	{
 		//
+		std::cout << "FSAx16 bloks count: " << alloc16.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx32 bloks count: " << alloc32.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx64 bloks count: " << alloc64.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx128 bloks count: " << alloc128.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx256 bloks count: " << alloc256.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx512 bloks count: " << alloc512.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
 	}
 
 	virtual void DumpBlocks() const
@@ -783,4 +894,5 @@ public:
 #endif // DEBUG	
 
 };
+
 
