@@ -254,7 +254,7 @@ public:
 	void PrintAllBusyBlocks() const // поиск занятых блоков
 	{
 		std::cout << "----------------------------------- \n";
-		std::cout << "FSAx" << blockSize << "busy blocks: \n";
+		std::cout << "FSAx" << blockSize << " busy blocks: \n";
 		auto currentPage = mainPage;
 		//auto currentBlock = (BlockHeader*)((char*)currentPage);
 		auto currentBlock = (BlockHeader*)((char*)currentPage + blockSize);
@@ -263,7 +263,7 @@ public:
 			while (currentBlock->nextFreeBlockIndex != -1)
 			{
 				auto head = currentPage->headFL;
-				currentBlock = (BlockHeader*)((char*)currentBlock + blockSize);
+				//currentBlock = (BlockHeader*)((char*)currentBlock + blockSize);
 				bool isBusy = true;
 				while (head != nullptr &&  head->nextFreeBlockIndex != -1)
 				{
@@ -275,6 +275,7 @@ public:
 						break;
 					}
 				}
+				currentBlock = (BlockHeader*)((char*)currentBlock + blockSize);
 				if (isBusy == true)
 					std::cout << "block: " << currentBlock << "; size: " << blockSize << "\n";			
 			}
@@ -672,30 +673,41 @@ public:
 
 	void PrintAllBusyBlocks() const // поиск занятых блоков
 	{
-		//std::cout << "----------------------------------- \n";
-		//std::cout << "FSAx" << blockSize << "busy blocks: \n";
-		//auto currentPage = mainPage;
-		////auto currentBlock = (BlockHeader*)((char*)currentPage);
-		//auto currentBlock = (BlockHeader*)((char*)currentPage + blockSize);
+		std::cout << "----------------------------------- \n";
+		std::cout << "CA busy blocks: \n";
+		auto currentPage = mainPage;	
+		while (currentPage != nullptr)
+		{
+			auto currentBlock = (BlockHeader*)((char*)currentPage + sizeof(PageHeader));
+			while (currentBlock != nullptr)
+			{
+				if (currentBlock->isFree == false)
+					std::cout << "block: " << currentBlock << "; size: " << currentBlock->blockSize << "\n";
+				currentBlock = currentBlock->nextBlock;
+			}
+			currentPage = currentPage->nextPage;
+		}
 		//while (currentPage != nullptr)
 		//{
-		//	while (currentBlock->nextFreeBlockIndex != -1)
+		//	while (currentBlock != nullptr)
 		//	{
 		//		auto head = currentPage->headFL;
-		//		currentBlock = (BlockHeader*)((char*)currentBlock + blockSize);
+		//		//currentBlock = currentBlock->nextBlock;
 		//		bool isBusy = true;
-		//		while (head != nullptr &&  head->nextFreeBlockIndex != -1)
+		//		//while (head != nullptr &&  head->nextFreeBlock != nullptr)
+		//		while (head != nullptr)
 		//		{
 		//			if (head != currentBlock)
-		//				head = (BlockHeader*)((char*)currentPage + (head->nextFreeBlockIndex * blockSize) + blockSize);
+		//				head = head->nextFreeBlock;
 		//			else
 		//			{
 		//				isBusy = false;
 		//				break;
 		//			}
 		//		}
+		//		currentBlock = currentBlock->nextBlock;
 		//		if (isBusy == true)
-		//			std::cout << "block: " << currentBlock << "; size: " << blockSize << "\n";
+		//			std::cout << "block: " << currentBlock << "; size: " << currentBlock->blockSize << "\n";
 		//	}
 		//	currentPage = currentPage->nextPage;
 		//}
@@ -1007,6 +1019,7 @@ public:
 		alloc128.PrintAllBusyBlocks();
 		alloc256.PrintAllBusyBlocks();
 		alloc512.PrintAllBusyBlocks();
+		coalAlloc.PrintAllBusyBlocks();
 	}
 #endif // DEBUG	
 
