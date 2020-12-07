@@ -86,15 +86,52 @@
 //	EXPECT_EQ(*p1, 1024);
 //}
 
-TEST(CoalesceAllocatorTest, FreeTest_2)
+//TEST(CoalesceAllocatorTest, FreeTest_2)
+//{
+//	MemoryAllocator allocator;
+//	allocator.Init();
+//	//выдел€ютс€ 5 страниц с одним блоком на 5 мб
+//	int *ptr_1 = (int*)allocator.Alloc(1024 * 1024 * 5); //выдел€ю пам€ть по 5 мб
+//	int *ptr_2 = (int*)allocator.Alloc(1024 * 1024 * 5);
+//	int *ptr_3 = (int*)allocator.Alloc(1024 * 1024 * 5);
+//	int *ptr_4 = (int*)allocator.Alloc(1024 * 1024 * 5);
+//	int *ptr_5 = (int*)allocator.Alloc(1024 * 1024 * 5);
+//	*ptr_1 = 1000000;
+//	*ptr_2 = 2000000;
+//	*ptr_3 = 3000000;
+//	*ptr_4 = 4000000;
+//	*ptr_5 = 5000000;
+//	EXPECT_EQ(*ptr_1, 1000000);
+//	EXPECT_EQ(*ptr_2, 2000000);
+//	EXPECT_EQ(*ptr_3, 3000000);
+//	EXPECT_EQ(*ptr_4, 4000000);
+//	EXPECT_EQ(*ptr_5, 5000000);
+//	allocator.Free(ptr_3);
+//	allocator.Free(ptr_4);
+//	allocator.Free(ptr_1);
+//	int *testPtr_1 = (int*)allocator.Alloc(1024 * 1024 * 5);
+//	*testPtr_1 = 111;
+//	EXPECT_EQ(*ptr_1, 111);
+//	///////////////////////
+//	int *testPtr_2 = (int*)allocator.Alloc(1024 * 1024 * 5);
+//	*testPtr_2 = 222;
+//	EXPECT_EQ(*ptr_3, 222);
+//	///////////////////////
+//	int *testPtr_3 = (int*)allocator.Alloc(1024 * 1024 * 5);
+//	*testPtr_3 = 333;
+//	EXPECT_EQ(*ptr_4, 333);
+//}
+
+TEST(CoalesceAllocatorTest, FreeTest_3)
 {
 	MemoryAllocator allocator;
 	allocator.Init();
-	int *ptr_1 = (int*)allocator.Alloc(1024 * 1024 * 5);
-	int *ptr_2 = (int*)allocator.Alloc(1024 * 1024 * 5);
-	int *ptr_3 = (int*)allocator.Alloc(1024 * 1024 * 5);
-	int *ptr_4 = (int*)allocator.Alloc(1024 * 1024 * 5);
-	int *ptr_5 = (int*)allocator.Alloc(1024 * 1024 * 5);
+	int *ptr_1 = (int*)allocator.Alloc(1024 * 1024 * 2);//выдел€ю блоки по 2 мб
+	int *ptr_2 = (int*)allocator.Alloc(1024 * 1024 * 2);
+	int *ptr_3 = (int*)allocator.Alloc(1024 * 1024 * 2);
+	int *ptr_4 = (int*)allocator.Alloc(1024 * 1024 * 2);
+	int *ptr_5 = (int*)allocator.Alloc(1024 * 1024 * 2);
+	//выдел€етс€ 2 страницы, в 1 странице 4 зан€тых блока(ptr_1 - .._4), во 2 странице 1 зан€тый блок (ptr_5)
 	*ptr_1 = 1000000;
 	*ptr_2 = 2000000;
 	*ptr_3 = 3000000;
@@ -105,21 +142,20 @@ TEST(CoalesceAllocatorTest, FreeTest_2)
 	EXPECT_EQ(*ptr_3, 3000000);
 	EXPECT_EQ(*ptr_4, 4000000);
 	EXPECT_EQ(*ptr_5, 5000000);
-
-
 	allocator.Free(ptr_3);
-
 	allocator.Free(ptr_4);
-
 	allocator.Free(ptr_1);
+	allocator.Free(ptr_5);
 
-	int *testPtr_1 = (int*)allocator.Alloc(1024 * 1024 * 5);
-	*testPtr_1 = 111;
-	EXPECT_EQ(*ptr_1, 111);
-	EXPECT_EQ(*ptr_4, 111);///?
-	EXPECT_EQ(*ptr_3, 111);///?
-
-	//int *testPtr_2 = (int*)allocator.Alloc(1024 * 1024 * 5);
-	//*testPtr_2 = 222;
-	//EXPECT_EQ(*ptr_4, 222);
+	int *testPtr_1 = (int*)allocator.Alloc(1024 * 1024 * 2); // 2 мб
+	*testPtr_1 = 1111;
+	EXPECT_EQ(*ptr_3, 1111); // данные записываютс€ в птр3 так как дл€ птр1 требуетс€ запас дл€ разделени€ €чейки
+	///////////////////////
+	int *testPtr_2 = (int*)allocator.Alloc(1024 * 1024 * 1); // 1 мб
+	*testPtr_2 = 2222;
+	EXPECT_EQ(*ptr_1, 2222); // данные помещаютс€ в освобожденный блок птр1
+	/////////////////////////
+	int *testPtr_3 = (int*)allocator.Alloc(1024 * 1024 * 8); //8 мб
+	*testPtr_3 = 3333;
+	EXPECT_EQ(*ptr_5, 3333);
 }

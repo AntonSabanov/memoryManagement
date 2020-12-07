@@ -421,7 +421,7 @@ public:
 				else // если следующей страницы нет, то создаем новую страницу
 				{
 					auto newPage = AddNewPage(); //добавляем новую страницу
-					newPage->headFL = (BlockHeader*)((char*)mainPage + sizeof(PageHeader)); //добавляем голову списка в новую страницу
+					newPage->headFL = (BlockHeader*)((char*)newPage + sizeof(PageHeader)); //добавляем голову списка в новую страницу
 					newPage->headFL->blockSize = pageSize - sizeof(PageHeader);
 					currentPage->nextPage = newPage; //записываем новую страницу в next для текущей страницы	
 					currentPage = newPage; // переходим в новую страницу и ищем там
@@ -486,9 +486,10 @@ public:
 				currentBlock->nextBlock->prevBlock = leftBlock;//
 			leftBlock->blockSize += currentBlock->blockSize;
 			currentBlock = leftBlock;
+			currentBlock->isFree = true;
 		}
 
-		if (currentBlock->nextBlock != nullptr && currentBlock->nextBlock->isFree)
+		if (currentBlock->nextBlock != nullptr && currentBlock->nextBlock->isFree) //если сободен сосед справа
 		{
 			auto rightBlock = currentBlock->nextBlock; //сосед справа
 			currentBlock->nextBlock = rightBlock->nextBlock; //следующий блок для текущего
@@ -502,8 +503,10 @@ public:
 			{
 				currentPage->headFL = currentBlock;
 			}
+			currentBlock->isFree = true;
 		}
 
+		// если блок находится между двумя занятыми блоками, либо слева пусто и справа занятый блок, либо справа пусто и слева занятый блок
 		if (currentBlock->nextBlock != nullptr && currentBlock->prevBlock != nullptr && currentBlock->nextBlock->isFree == false && currentBlock->prevBlock->isFree == false 
 			|| currentBlock->nextBlock == nullptr && currentBlock->prevBlock != nullptr && currentBlock->prevBlock->isFree == false
 			|| currentBlock->nextBlock != nullptr && currentBlock->prevBlock == nullptr && currentBlock->nextBlock->isFree == false)
@@ -513,6 +516,7 @@ public:
 			currentBlock->nextFreeBlock = currentPage->headFL;
 			currentBlock->prevFreeBlock = nullptr;
 			currentPage->headFL = currentBlock;
+			currentBlock->isFree = true;
 		}		
 	}
 
@@ -642,7 +646,7 @@ public:
 		}
 
 		size_t FSA_metaDataSize = 1 * sizeof(int); // размер метаданных в каждом блоке для FSA аллокатора
-		size_t CA_metaDataSize = 24; // размер метаданных в блоке для CA аллокатора
+		size_t CA_metaDataSize = sizeof(CoalesceAllocator::BlockHeader); // размер метаданных в блоке для CA аллокатора
 
 		//вызов в зависимости от аллокатора
 		if (size <= 16 - FSA_metaDataSize) // меньше 12 байт с учетом служебных данных в блоке
