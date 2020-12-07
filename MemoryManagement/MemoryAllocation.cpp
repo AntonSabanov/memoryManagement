@@ -38,14 +38,18 @@ public:
 	PageHeader* mainPage = nullptr;
 	bool isInit = false;
 
+#ifdef _DEBUG
 	int blocksCount;
 	int freeBlocksCount;
+#endif//DEBUG
 
 	FixedSizeAllocator(size_t blockSize)
 	{	
 		this->blockSize = blockSize;
+#ifdef _DEBUG
 		blocksCount = 0;
 		freeBlocksCount = 0;
+#endif//DEBUG
 	}
 
 	~FixedSizeAllocator()
@@ -70,31 +74,25 @@ public:
 		while (tempPage->nextPage != nullptr)
 		{
 			PageHeader* tempNextPage = tempPage->nextPage;
-			isReleased = VirtualFree(
-				(LPVOID)tempPage,
-				0,
-				MEM_RELEASE);			
-
+			isReleased = VirtualFree((LPVOID)tempPage, 0, MEM_RELEASE);			
 #ifdef _DEBUG
 			assert(isReleased);  // проверка на освобождение
-#endif // DEBUG		
-
+#endif//DEBUG		
 			tempPage = tempNextPage;
 		}
 
 		if (tempPage != nullptr)
 		{
-			isReleased = VirtualFree(
-				(LPVOID)tempPage,
-				0,
-				MEM_RELEASE);
-
+			isReleased = VirtualFree((LPVOID)tempPage, 0, MEM_RELEASE);
 #ifdef _DEBUG
 			assert(isReleased);  // проверка на освобождение
-#endif // DEBUG	
+#endif//DEBUG	
 		}
+
+#ifdef _DEBUG
 		blocksCount = 0;
 		freeBlocksCount = 0;
+#endif//DEBUG
 
 		isInit = false; //аллокатор деинициализирован
 	}
@@ -154,8 +152,10 @@ public:
 		//	BlockHeadersInit(newPage);												//инициализируем блоки в новой странице
 		//	currentPage->nextPage = newPage;										//записываем новую страницу в next для текущей страницы		
 		//}
-		
+
+#ifdef _DEBUG
 		freeBlocksCount--; //уменьшение количества свободных блоков
+#endif//DEBUG
 
 		return currentFreeBlock;
 	}
@@ -173,9 +173,9 @@ public:
 				auto currentBlockindex = ((char*)curPage->headFL - (char*)curPage) / blockSize - 1;	// расчет индекса текущего свободного элемента
 				curPage->headFL = (BlockHeader*)((char*)p - sizeof(int));
 				curPage->headFL->nextFreeBlockIndex = currentBlockindex;
-
+#ifdef _DEBUG
 				freeBlocksCount++; // увеличение количества свободных блоков
-
+#endif//DEBUG
 				break;
 			}
 			else
@@ -194,17 +194,12 @@ public:
 
 	PageHeader* AddNewPage()	//выделение новой страницы
 	{
-		auto newPage = (PageHeader*)VirtualAlloc(
-			NULL,
-			PAGESIZE,
-			MEM_COMMIT,	//инициализирует страницу
-			PAGE_READWRITE);
+		auto newPage = (PageHeader*)VirtualAlloc(NULL, PAGESIZE, MEM_COMMIT, PAGE_READWRITE); //инициализирует страницу 
 		isInit = true; // страница выделена, аллокатор проинициализирован
-
 #ifdef _DEBUG
 		assert(newPage != NULL);	// проверка на инициализацию страницы
 		assert(isInit);
-#endif // DEBUG	
+#endif//DEBUG	
 
 		return newPage;
 	}
@@ -223,8 +218,11 @@ public:
 		temp->nextFreeBlockIndex = -1; // последний блок не имеет следующего
 		//blocksCount++;
 
+#ifdef _DEBUG
 		blocksCount += i; // количество блоков в аллокаторе всего
-		freeBlocksCount += blocksCount; // количество свободных блоков в аллокаторе всего
+		freeBlocksCount += i; // количество свободных блоков в аллокаторе всего
+#endif//DEBUG
+
 	}
 
 	bool IsAllocatorContainPointer(void* p)
@@ -252,6 +250,37 @@ public:
 	{
 		return blocksCount;
 	}
+
+	void PrintAllBusyBlocks() const // поиск занятых блоков
+	{
+		std::cout << "----------------------------------- \n";
+		std::cout << "FSAx" << blockSize << "busy blocks: \n";
+		auto currentPage = mainPage;
+		//auto currentBlock = (BlockHeader*)((char*)currentPage);
+		auto currentBlock = (BlockHeader*)((char*)currentPage + blockSize);
+		while (currentPage != nullptr)
+		{
+			while (currentBlock->nextFreeBlockIndex != -1)
+			{
+				auto head = currentPage->headFL;
+				currentBlock = (BlockHeader*)((char*)currentBlock + blockSize);
+				bool isBusy = true;
+				while (head != nullptr &&  head->nextFreeBlockIndex != -1)
+				{
+					if (head != currentBlock)
+						head = (BlockHeader*)((char*)currentPage + (head->nextFreeBlockIndex * blockSize) + blockSize);
+					else
+					{
+						isBusy = false;
+						break;
+					}
+				}
+				if (isBusy == true)
+					std::cout << "block: " << currentBlock << "; size: " << blockSize << "\n";			
+			}
+			currentPage = currentPage->nextPage;
+		}	
+	}
 #endif//DEBUG	
 
 };
@@ -278,12 +307,20 @@ public:
 	size_t pageSize;
 	PageHeader* mainPage = nullptr;
 	bool isInit = false;
-	int blocksCount = 0;
+
+#ifdef _DEBUG
+	int blocksCount;
+	int freeBlocksCount;
+#endif//DEBUG
 
 	CoalesceAllocator()
 	{
-		//pageSize = (size_t)(1024 * 1024 * 10) + sizeof(BlockHeader); //выделение страницы с запасом
-		pageSize = (size_t)(1024 * 1024 * 10); //выделение страницы
+		pageSize = (size_t)(1024 * 1024 * 10); //размер выделяемых страниц
+
+#ifdef _DEBUG
+		blocksCount = 0;
+		freeBlocksCount = 0;
+#endif//DEBUG
 	}
 
 	~CoalesceAllocator()
@@ -300,6 +337,10 @@ public:
 		mainPage->headFL = (BlockHeader*)((char*)mainPage + sizeof(PageHeader));	// смещение указателя на первый свободный блок (сдвиг на велечину заголовка страницы)	
 		mainPage->headFL->blockSize = pageSize - sizeof(PageHeader); // размер первого блока с учетом метаданных блока и без учета заголовка страницы
 		mainPage->headFL->isFree = true;
+#ifdef _DEBUG
+		blocksCount++;
+		freeBlocksCount++;
+#endif//DEBUG
 	}
 
 	PageHeader* AddNewPage()
@@ -345,6 +386,11 @@ public:
 		
 		}
 
+#ifdef _DEBUG
+		blocksCount = 0;
+		freeBlocksCount = 0;
+#endif//DEBUG
+
 		isInit = false; //аллокатор деинициализирован
 	}
 
@@ -354,11 +400,12 @@ public:
 		auto currentFreeBlock = page->headFL;
 		while (currentFreeBlock != nullptr) // ищем блок до тех пор, пока не достигнем конца фри-листа
 		{
-			auto test1 = currentFreeBlock->blockSize;
-			auto test2 = dataSize + sizeof(BlockHeader);
+	/*		auto test1 = currentFreeBlock->blockSize;
+			auto test2 = dataSize + sizeof(BlockHeader);*/
 			if (currentFreeBlock->blockSize > dataSize + sizeof(BlockHeader)) //если данные помещаются в блок памяти c запасом под заголовок
 			{
 				//freeBlock = (char*)currentFreeBlock;	//адрес возвращаемого пустого блока
+				//разделение блока
 				auto newBlock = (BlockHeader*)((char*)currentFreeBlock + sizeof(BlockHeader) + dataSize); // выделяем новый блок (делим текущий)
 				newBlock->nextBlock = currentFreeBlock->nextBlock; // для нового блока следующим становится следующий для текущего
 				newBlock->prevBlock = currentFreeBlock; //запоминаем предыдущий блок для следующего		
@@ -392,6 +439,9 @@ public:
 				}
 
 				returnedFreeBlock = (char*)currentFreeBlock + sizeof(BlockHeader);//возвращемый блок без служебной инфы
+#ifdef _DEBUG
+				blocksCount++; // добавляем новый блок
+#endif//DEBUG
 				break;
 			}
 			else // если данные не помещаются в блок
@@ -464,6 +514,10 @@ public:
 					newPage->headFL->blockSize = pageSize - sizeof(PageHeader);
 					currentPage->nextPage = newPage; //записываем новую страницу в next для текущей страницы	
 					currentPage = newPage; // переходим в новую страницу и ищем там
+#ifdef _DEBUG
+					blocksCount++; //
+					freeBlocksCount++; // добавляем свободный блок
+#endif//DEBUG
 				}
 			}
 			else
@@ -526,6 +580,11 @@ public:
 			leftBlock->blockSize += currentBlock->blockSize;
 			currentBlock = leftBlock;
 			currentBlock->isFree = true;
+#ifdef _DEBUG
+			blocksCount--; // уменьшение количества блоков т.к. блоки объединяются
+			if (currentBlock->nextBlock != nullptr && currentBlock->nextBlock->isFree == true)
+				freeBlocksCount--;
+#endif//DEBUG
 		}
 
 		if (currentBlock->nextBlock != nullptr && currentBlock->nextBlock->isFree) //если сободен сосед справа
@@ -543,6 +602,9 @@ public:
 				currentPage->headFL = currentBlock;
 			}
 			currentBlock->isFree = true;
+#ifdef _DEBUG
+			blocksCount--; // уменьшение количества блоков т.к. блоки объединяются
+#endif//DEBUG
 		}
 
 		// если блок находится между двумя занятыми блоками, либо слева пусто и справа занятый блок, либо справа пусто и слева занятый блок
@@ -556,6 +618,9 @@ public:
 			currentBlock->prevFreeBlock = nullptr;
 			currentPage->headFL = currentBlock;
 			currentBlock->isFree = true;
+#ifdef _DEBUG
+			freeBlocksCount++; // увеличение количества свободных блоков
+#endif//DEBUG
 		}		
 	}
 
@@ -593,6 +658,49 @@ public:
 		}
 		return currentPage;
 	}
+
+#ifdef _DEBUG
+	const int GetFreeBlocksCount() const
+	{
+		return freeBlocksCount;
+	}
+
+	const int GetAllBlocksCount() const
+	{
+		return blocksCount;
+	}
+
+	void PrintAllBusyBlocks() const // поиск занятых блоков
+	{
+		//std::cout << "----------------------------------- \n";
+		//std::cout << "FSAx" << blockSize << "busy blocks: \n";
+		//auto currentPage = mainPage;
+		////auto currentBlock = (BlockHeader*)((char*)currentPage);
+		//auto currentBlock = (BlockHeader*)((char*)currentPage + blockSize);
+		//while (currentPage != nullptr)
+		//{
+		//	while (currentBlock->nextFreeBlockIndex != -1)
+		//	{
+		//		auto head = currentPage->headFL;
+		//		currentBlock = (BlockHeader*)((char*)currentBlock + blockSize);
+		//		bool isBusy = true;
+		//		while (head != nullptr &&  head->nextFreeBlockIndex != -1)
+		//		{
+		//			if (head != currentBlock)
+		//				head = (BlockHeader*)((char*)currentPage + (head->nextFreeBlockIndex * blockSize) + blockSize);
+		//			else
+		//			{
+		//				isBusy = false;
+		//				break;
+		//			}
+		//		}
+		//		if (isBusy == true)
+		//			std::cout << "block: " << currentBlock << "; size: " << blockSize << "\n";
+		//	}
+		//	currentPage = currentPage->nextPage;
+		//}
+	}
+#endif//DEBUG	
 };
 
 class MemoryAllocator
@@ -879,17 +987,26 @@ public:
 	virtual void DumpStat() const
 	{
 		//
-		std::cout << "FSAx16 bloks count: " << alloc16.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
-		std::cout << "FSAx32 bloks count: " << alloc32.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
-		std::cout << "FSAx64 bloks count: " << alloc64.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
-		std::cout << "FSAx128 bloks count: " << alloc128.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
-		std::cout << "FSAx256 bloks count: " << alloc256.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
-		std::cout << "FSAx512 bloks count: " << alloc512.GetAllBlocksCount() << " free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
+		std::cout << "----------------------------------- \n";
+		std::cout << "FSAx16 bloks count: " << alloc16.GetAllBlocksCount() << "; free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx32 bloks count: " << alloc32.GetAllBlocksCount() << "; free bloks count: " << alloc32.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx64 bloks count: " << alloc64.GetAllBlocksCount() << "; free bloks count: " << alloc64.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx128 bloks count: " << alloc128.GetAllBlocksCount() << "; free bloks count: " << alloc128.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx256 bloks count: " << alloc256.GetAllBlocksCount() << "; free bloks count: " << alloc256.GetFreeBlocksCount() << std::endl;
+		std::cout << "FSAx512 bloks count: " << alloc512.GetAllBlocksCount() << "; free bloks count: " << alloc512.GetFreeBlocksCount() << std::endl;
+		std::cout << "CA bloks count: " << coalAlloc.GetAllBlocksCount() << "; free bloks count: " << coalAlloc.GetFreeBlocksCount() << std::endl;
 	}
 
 	virtual void DumpBlocks() const
 	{
 		//
+		//std::cout << "----------------------------------- \n";
+		alloc16.PrintAllBusyBlocks();
+		alloc32.PrintAllBusyBlocks();
+		alloc64.PrintAllBusyBlocks();
+		alloc128.PrintAllBusyBlocks();
+		alloc256.PrintAllBusyBlocks();
+		alloc512.PrintAllBusyBlocks();
 	}
 #endif // DEBUG	
 
