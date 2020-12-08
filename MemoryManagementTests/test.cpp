@@ -1,13 +1,103 @@
 #include "pch.h"
 #include "../MemoryManagement/MemoryAllocation.cpp"
 
-TEST(TestCaseName, TestName) 
+//TEST(TestCaseName, TestName) 
+//{
+//  EXPECT_EQ(1, 1);
+//  EXPECT_TRUE(true);
+//}
+
+TEST(FSA_Test, AllocTest_16) // проверка, что вызываются нужные аллокаторы
 {
-  EXPECT_EQ(1, 1);
-  EXPECT_TRUE(true);
+	MemoryAllocator allocator;
+	allocator.Init();
+	int *ptr_1 = (int*)allocator.Alloc(3 * sizeof(int));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA16);
+	int *ptr_2 = (int*)allocator.Alloc(10);
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA16);
+	double *ptr_3 = (double*)allocator.Alloc(sizeof(double));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA16);
 }
 
-TEST(AllocTypeTest, Test) // проверка, что вызываются нужные аллокаторы
+TEST(FSA_Test, AllocTest_32) // проверка, что вызываются нужные аллокаторы
+{
+	MemoryAllocator allocator;
+	allocator.Init();
+	double *ptr_1 = (double*)allocator.Alloc(2 * sizeof(double));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA32);
+	char *ptr_2 = (char*)allocator.Alloc(25);
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA32);
+	int *ptr_3 = (int*)allocator.Alloc(5 * sizeof(int));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA32);
+}
+
+TEST(FSA_Test, AllocTest_64) // проверка, что вызываются нужные аллокаторы
+{
+	MemoryAllocator allocator;
+	allocator.Init();
+	int *ptr_1 = (int*)allocator.Alloc(9 * sizeof(int));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA64);
+	double *ptr_2 = (double*)allocator.Alloc(7 * sizeof(double));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA64);
+	int *ptr_3 = (int*)allocator.Alloc(60);
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA64);
+}
+
+TEST(FSA_Test, AllocTest_128) // проверка, что вызываются нужные аллокаторы
+{
+	MemoryAllocator allocator;
+	allocator.Init();
+	int *ptr_1 = (int*)allocator.Alloc(25 * sizeof(int));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA128);
+	float *ptr_2 = (float*)allocator.Alloc(25 * sizeof(float));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA128);
+	char *ptr_3 = (char*)allocator.Alloc(124 * sizeof(char));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA128);
+}
+
+TEST(FSA_Test, AllocTest_256) // проверка, что вызываются нужные аллокаторы
+{
+	MemoryAllocator allocator;
+	allocator.Init();
+	int *ptr_1 = (int*)allocator.Alloc(50 * sizeof(int));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA256);
+	double *ptr_2 = (double*)allocator.Alloc(25 * sizeof(double));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA256);
+	int *ptr_3 = (int*)allocator.Alloc(252);
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA256);
+}
+
+TEST(FSA_Test, AllocTest_512) // проверка, что вызываются нужные аллокаторы
+{
+	MemoryAllocator allocator;
+	allocator.Init();
+	int *ptr_1 = (int*)allocator.Alloc(100 * sizeof(int));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA512);
+	int *ptr_2 = (int*)allocator.Alloc(500);
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA512);
+	double *ptr_3 = (double*)allocator.Alloc(63 * sizeof(double));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), FSA512);
+}
+
+TEST(CA_Test, AllocTest) // проверка, что вызываются нужные аллокаторы
+{
+	MemoryAllocator allocator;
+	allocator.Init();
+	int *ptr_1 = (int*)allocator.Alloc(200 * sizeof(int));
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), CA);
+	int *ptr_2 = (int*)allocator.Alloc(1024 * 1024 * 8);
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), CA);
+}
+
+TEST(OS_Test, AllocTest) // проверка, что вызываются нужные аллокаторы
+{
+	MemoryAllocator allocator;
+	allocator.Init();
+	int *ptr_1 = (int*)allocator.Alloc(1024 * 1024 * 11);
+	EXPECT_EQ(allocator.GetCurrentAllocatorType(), OS);
+}
+
+TEST(AllocAllTypeTest, Test) // проверка, что вызываются нужные аллокаторы
 {
 	MemoryAllocator allocator;
 	allocator.Init();
@@ -31,7 +121,7 @@ TEST(AllocTypeTest, Test) // проверка, что вызываются нужные аллокаторы
 	EXPECT_EQ(allocator.GetCurrentAllocatorType(), OS);
 }
 
-TEST(FreeTypeTest, Test) // проверка, что вызываются методы free для нужных аллокаторов
+TEST(FreeAllTypeTest, Test) // проверка, что вызываются методы free для нужных аллокаторов
 {
 	MemoryAllocator allocator;
 	allocator.Init();
@@ -64,73 +154,94 @@ TEST(FreeTypeTest, Test) // проверка, что вызываются методы free для нужных алло
 	EXPECT_EQ(allocator.GetCurrentAllocatorType(), OS);
 }
 
-TEST(Test, Test) 
+TEST(FSA_Test, FreeList_Test) 
 {
 	MemoryAllocator allocator;
 	allocator.Init();
-	int *p1 = (int*)allocator.Alloc(sizeof(int));
-	*p1 = 5;
-	int *p2 = (int*)allocator.Alloc(sizeof(int));
-	*p2 = 7;
-	int *p3 = (int*)allocator.Alloc(sizeof(int));
-	*p3 = 3;
-	EXPECT_EQ(*p1, 5);
-	EXPECT_EQ(*p2, 7);
-	EXPECT_EQ(*p3, 3);
-	allocator.Free(p2);
-	int *p4 = (int*)allocator.Alloc(sizeof(int));
-	*p4 = 8;
-	int *p5 = (int*)allocator.Alloc(sizeof(int));
-	*p5 = 9;
-	//EXPECT_EQ(*p2, 7);
-	EXPECT_TRUE(true);
+	int *ptr_1 = (int*)allocator.Alloc(sizeof(int));
+	*ptr_1 = 5;
+	int *ptr_2 = (int*)allocator.Alloc(sizeof(int));
+	*ptr_2 = 7;
+	int *ptr_3 = (int*)allocator.Alloc(sizeof(int));
+	*ptr_3 = 3;
+	EXPECT_EQ(*ptr_1, 5);
+	EXPECT_EQ(*ptr_2, 7);
+	EXPECT_EQ(*ptr_3, 3);
+
+	allocator.Free(ptr_2);
+	int *ptr_4 = (int*)allocator.Alloc(sizeof(int));
+	*ptr_4 = 8;
+	EXPECT_EQ(*ptr_2, 8);
+
+	allocator.Free(ptr_3);
+	allocator.Free(ptr_1);
+	int *ptr_5 = (int*)allocator.Alloc(sizeof(int));
+	*ptr_5 = 9;
+	int *ptr_6 = (int*)allocator.Alloc(sizeof(int));
+	*ptr_6 = 10;
+	EXPECT_EQ(*ptr_1, 9);
+	EXPECT_EQ(*ptr_3, 10);
 }
 
-TEST(Test1, Test)
+TEST(FSA_Test, AddNewPage_Test_1)
 {
 	MemoryAllocator allocator;
 	allocator.Init();
-	for (int i = 0; i < 254; i++)
+	for (int i = 0; i < 254; i++) // заполнение страницы полностью
 	{
-		int *p = (int*)allocator.Alloc(sizeof(int));
-		*p = i;
+		int *ptr = (int*)allocator.Alloc(sizeof(int));
+		*ptr = i;
 	}
-	int *p = (int*)allocator.Alloc(sizeof(int));
-	*p = 3;
-	EXPECT_EQ(*p, 3);
-	allocator.Free(p);
-	*p = 7;
-	EXPECT_EQ(*p, 7);
+	int *ptr = (int*)allocator.Alloc(sizeof(int));
+	*ptr = 3;
+	EXPECT_EQ(*ptr, 3);
+
+	allocator.Free(ptr);
+	int *ptr_1 = (int*)allocator.Alloc(sizeof(int));
+	*ptr_1 = 7;
+	EXPECT_EQ(*ptr, 7);
 }
 
-TEST(Test2, Test)
+TEST(FSA_Test, AddNewPage_Test_2)
 {
 	MemoryAllocator allocator;
 	allocator.Init();
-	for (int i = 0; i < 254; i++)
+	for (int i = 0; i < 7; i++) // заполнение страницы полностью
 	{
-		int *p = (int*)allocator.Alloc(sizeof(int));
-		*p = i;
+		int *ptrFSA_512 = (int*)allocator.Alloc(100 * sizeof(int));
+		*ptrFSA_512 = i * 111;
+		EXPECT_EQ(*ptrFSA_512, i * 111);
 	}
-	int *p = (int*)allocator.Alloc(32);
-	*p = 3;
-	EXPECT_EQ(*p, 3);
-	allocator.Free(p);
-	*p = 7;
-	EXPECT_EQ(*p, 7);
 }
 
-TEST(CoalesceAllocatorTest, AllocTest)
-{
-	MemoryAllocator allocator;
-	allocator.Init();	
-	int *p = (int*)allocator.Alloc(1024 * 1024 * 5);
-	*p = 1024 * 1024;
-	EXPECT_EQ(*p, 1024 * 1024);
-	//allocator.Free(p);
-}
+//TEST(Test2, Test)
+//{
+//	MemoryAllocator allocator;
+//	allocator.Init();
+//	for (int i = 0; i < 254; i++)
+//	{
+//		int *p = (int*)allocator.Alloc(sizeof(int));
+//		*p = i;
+//	}
+//	int *p = (int*)allocator.Alloc(32);
+//	*p = 3;
+//	EXPECT_EQ(*p, 3);
+//	allocator.Free(p);
+//	*p = 7;
+//	EXPECT_EQ(*p, 7);
+//}
 
-TEST(CoalesceAllocatorTest, FreeTest_1)
+//TEST(CA_Test, AllocTest_1)
+//{
+//	MemoryAllocator allocator;
+//	allocator.Init();	
+//	int *p = (int*)allocator.Alloc(1024 * 1024 * 5);
+//	*p = 1024 * 1024;
+//	EXPECT_EQ(*p, 1024 * 1024);
+//	//allocator.Free(p);
+//}
+
+TEST(CA_Test, FreeTest_1)
 {
 	MemoryAllocator allocator;
 	allocator.Init();
@@ -143,7 +254,7 @@ TEST(CoalesceAllocatorTest, FreeTest_1)
 	EXPECT_EQ(*p1, 1024);
 }
 
-TEST(CoalesceAllocatorTest, FreeTest_2)
+TEST(CA_Test, FreeTest_2)
 {
 	MemoryAllocator allocator;
 	allocator.Init();
@@ -179,7 +290,7 @@ TEST(CoalesceAllocatorTest, FreeTest_2)
 	EXPECT_EQ(*ptr_4, 333);
 }
 
-TEST(CoalesceAllocatorTest, FreeTest_3)
+TEST(CA_Test, FreeTest_3)
 {
 	MemoryAllocator allocator;
 	allocator.Init();

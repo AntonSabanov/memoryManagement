@@ -450,7 +450,7 @@ public:
 				currentFreeBlock = currentFreeBlock->nextFreeBlock; //переходим к следующему блоку в списке
 			}
 		}
-		return returnedFreeBlock;
+		return returnedFreeBlock; 
 		//void* freeBlock = nullptr;
 		//auto currentFreeBlock = page->headFL;
 		//while (currentFreeBlock != nullptr) // ищем блок до тех пор, пока не достигнем конца фри-листа
@@ -728,10 +728,17 @@ public:
 
 	bool isInit = false;
 
-	LPVOID OS_mainPage = NULL; //страница запрошенная непосредственно у ОС
-	LPVOID OS_nextPage = NULL;
+	struct PageHeader
+	{
+		PageHeader* OS_nextPage = nullptr;//Ссылка на следующую страницу
+		size_t OS_blockSize; //размер текущего блока
+	};
+	PageHeader* OS_mainPage = nullptr; //страница запрошенная непосредственно у ОС
+	//LPVOID OS_mainPage = NULL; //страница запрошенная непосредственно у ОС
+
 
 #ifdef _DEBUG
+	int OS_blockCount;
 	AllocatorType currentAllocatorType = Uncalled;	// метод какого аллокатора был вызван
 #endif//DEBUG	
 
@@ -744,6 +751,10 @@ public:
 						coalAlloc()
 	{
 		isInit = false;	// аллокатор не инициализирован
+#ifdef _DEBUG
+		OS_blockCount = 0;
+#endif//DEBUG
+		
 	}
 
 	virtual ~MemoryAllocator() 
@@ -795,6 +806,10 @@ public:
 			alloc512.DestoyFSA();			
 			//////////////////
 			coalAlloc.DestoyCA();
+
+#ifdef _DEBUG
+			OS_blockCount = 0;
+#endif//DEBUG
 			isInit = false; //аллокатор деинициализирован
 		}		
 	}
@@ -839,7 +854,7 @@ public:
 #endif // DEBUG	
 			return alloc128.GetFreeBlock();
 		}	
-		else if (size > 128 - FSA_metaDataSize && size <= 256 - FSA_metaDataSize) //от 124 до 254 байт
+		else if (size > 128 - FSA_metaDataSize && size <= 256 - FSA_metaDataSize) //от 124 до 252 байт
 		{
 #ifdef _DEBUG
 			currentAllocatorType = FSA256;
@@ -862,21 +877,30 @@ public:
 		}
 		else if (size > (1024 * 1024 * 10) - CA_metaDataSize) //больше 10 Мбайт
 		{
-			OS_mainPage = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);
+			PageHeader* newPage = (PageHeader*)VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);
+			if (OS_mainPage == nullptr)
+				OS_mainPage = newPage;
+			PageHeader* currentPage = OS_mainPage;
+			while (currentPage != nullptr)
+			{
+				currentPage = currentPage->OS_nextPage;
+			}
+			currentPage = newPage;
+			currentPage->OS_blockSize = size;
+			//auto newPage = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);		
+			//OS_mainPage = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);			
 #ifdef _DEBUG
+			OS_blockCount++;
 			currentAllocatorType = OS;
-			assert(OS_mainPage != NULL);	// проверка на инициализацию страницы
+			//assert(OS_mainPage != NULL);	// проверка на инициализацию страницы
+			assert(newPage != nullptr);	// проверка на инициализацию страницы
 #endif//DEBUG	
-			return OS_mainPage;
+			return (char*)currentPage + sizeof(PageHeader);
 		}
 	}
 
 	virtual void Free(void *p)
 	{
-		//if (isInit == false) // если аллокаторы не были проинициализированны 
-		//{
-		//	return;
-		//}
 		assert(isInit);
 		
 		//вызов в зависимости от аллокатора
@@ -932,19 +956,40 @@ public:
 #endif//DEBUG
 			alloc512.SetFreeBlock(p);
 		}
-		//else 
-		//{
-		//	auto page = coalAlloc.IsAllocatorContainPointer(p);
-		//	if (page != nullptr)
-		//	{
-		//		coalAlloc.SetFreeBlock(page, p);
-		//		return;
-		//	}			
-		//}
 		else
 		{
+			auto currentPage = OS_mainPage;
+			PageHeader* nextBlock = nullptr;
+			PageHeader* prevBlock = nullptr;
+			while (currentPage != nullptr)
+			{
+				if ((char*)p >= (char*)currentPage && (char*)p < (char*)currentPage + currentPage->OS_blockSize) //если попадает в интервал
+				{
+					if (currentPage->OS_nextPage != nullptr && prevBlock != nullptr) //если блок посередине, то связываем блоки слева и справа между собой
+					{
+						nextBlock = currentPage->OS_nextPage;
+						prevBlock->OS_nextPage = nextBlock;
+					}
+					else if (currentPage->OS_nextPage != nullptr && prevBlock == nullptr) //если блок самый правый
+					{
+						OS_mainPage = currentPage->OS_nextPage;
+					}
+					else if (prevBlock != nullptr) //если блок самый левый
+					{
+						prevBlock->OS_nextPage = nullptr;
+					}
+					break;
+				}
+				else
+				{
+					prevBlock = currentPage;
+					currentPage = currentPage->OS_nextPage;
+				}
+			}
+
 			bool isReleased = VirtualFree((LPVOID)p, 0, MEM_RELEASE);
 #ifdef _DEBUG
+			OS_blockCount--;
 			currentAllocatorType = OS;
 			assert(isReleased);  // проверка на освобождение
 #endif // DEBUG	
@@ -996,6 +1041,18 @@ public:
 		return currentAllocatorType;
 	}
 
+	void PrintAllOSBusyBlocks() const // поиск занятых блоков
+	{
+		std::cout << "----------------------------------- \n";
+		std::cout << "OS busy blocks: \n";
+		auto currentPage = OS_mainPage;
+		while (currentPage != nullptr)
+		{
+			std::cout << "block: " << currentPage << "; size: " << currentPage->OS_blockSize << "\n";
+			currentPage = currentPage->OS_nextPage;
+		}
+	}
+
 	virtual void DumpStat() const
 	{
 		//
@@ -1007,6 +1064,7 @@ public:
 		std::cout << "FSAx256 bloks count: " << alloc256.GetAllBlocksCount() << "; free bloks count: " << alloc256.GetFreeBlocksCount() << std::endl;
 		std::cout << "FSAx512 bloks count: " << alloc512.GetAllBlocksCount() << "; free bloks count: " << alloc512.GetFreeBlocksCount() << std::endl;
 		std::cout << "CA bloks count: " << coalAlloc.GetAllBlocksCount() << "; free bloks count: " << coalAlloc.GetFreeBlocksCount() << std::endl;
+		std::cout << "OS bloks count: " << OS_blockCount << std::endl;
 	}
 
 	virtual void DumpBlocks() const
@@ -1020,6 +1078,7 @@ public:
 		alloc256.PrintAllBusyBlocks();
 		alloc512.PrintAllBusyBlocks();
 		coalAlloc.PrintAllBusyBlocks();
+		PrintAllOSBusyBlocks();
 	}
 #endif // DEBUG	
 
