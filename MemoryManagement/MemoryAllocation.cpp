@@ -24,7 +24,6 @@ class FixedSizeAllocator //Page
 public:
 	struct BlockHeader
 	{
-		//BlockHeader* nextFreeBlock = nullptr;		// следующий свободный блок
 		int nextFreeBlockIndex;	//индекс следующего свободного блока
 	};
 
@@ -46,6 +45,7 @@ public:
 	FixedSizeAllocator(size_t blockSize)
 	{	
 		this->blockSize = blockSize;
+
 #ifdef _DEBUG
 		blocksCount = 0;
 		freeBlocksCount = 0;
@@ -74,10 +74,12 @@ public:
 		while (tempPage->nextPage != nullptr)
 		{
 			PageHeader* tempNextPage = tempPage->nextPage;
-			isReleased = VirtualFree((LPVOID)tempPage, 0, MEM_RELEASE);			
+			isReleased = VirtualFree((LPVOID)tempPage, 0, MEM_RELEASE);	
+
 #ifdef _DEBUG
 			assert(isReleased);  // проверка на освобождение
 #endif//DEBUG		
+
 			tempPage = tempNextPage;
 		}
 
@@ -99,25 +101,7 @@ public:
 
 	void* GetFreeBlock()
 	{	
-		//void* currentFreeBlock;
-		auto currentPage = mainPage; // запоминаем текущую страницу начиная с главной
-
-		//while (currentPage->headFL->nextFreeBlockIndex < 0) //ищем страницу со свободныими блоками
-		//{
-		//	if (currentPage->nextPage != nullptr)
-		//	{
-		//		//currentFreeBlock = (char*)currentPage->headFL + sizeof(int); //
-		//		currentPage = currentPage->nextPage; //переходим к следующей странице
-		//	}
-		//	else
-		//	{
-		//		auto newPage = AddNewPage();	//добавляем новую страницу
-		//		newPage->headFL = (BlockHeader*)((char*)newPage + blockSize);	//добавляем голову списка в новую страницу
-		//		BlockHeadersInit(newPage);	//инициализируем блоки в новой странице
-		//		currentPage->nextPage = newPage;	//записываем новую страницу в next для текущей страницы		
-		//		currentPage = currentPage->nextPage; //переходим к следующей странице
-		//	}				
-		//}			
+		auto currentPage = mainPage; // запоминаем текущую страницу начиная с главной	
 
 		while (currentPage->headFL == nullptr) //ищем страницу со свободныими блоками
 		{
@@ -126,7 +110,6 @@ public:
 
 		auto currentFreeBlock = (char*)currentPage->headFL + sizeof(int);			//адрес текущего пустого блока с учетом индекса предыдущего (часть с данными в блоке)
 		int currentNextIndex = currentPage->headFL->nextFreeBlockIndex;				//индекс следующего блока после текущего
-		//currentPage->headFL = (BlockHeader*)((char*)currentPage + (currentNextIndex * blockSize) + blockSize); // переход на следующий свободный блок по его индексу (указатель без учета индекса след эл.)
 		
 		if (currentNextIndex > 0)
 		{
@@ -141,18 +124,6 @@ public:
 			currentPage->headFL = nullptr;
 		}
 
-		//if (currentNextIndex > 0)
-		//{
-		//	currentPage->headFL = (BlockHeader*)((char*)currentPage + (currentNextIndex * blockSize) + blockSize);// переход на следующий свободный блок по его индексу (указатель без учета индекса след эл.)
-		//}		
-		//else
-		//{
-		//	auto newPage = AddNewPage();											//добавляем новую страницу
-		//	newPage->headFL = (BlockHeader*)((char*)newPage + blockSize);			//добавляем голову списка в новую страницу
-		//	BlockHeadersInit(newPage);												//инициализируем блоки в новой странице
-		//	currentPage->nextPage = newPage;										//записываем новую страницу в next для текущей страницы		
-		//}
-
 #ifdef _DEBUG
 		freeBlocksCount--; //уменьшение количества свободных блоков
 #endif//DEBUG
@@ -160,7 +131,6 @@ public:
 		return currentFreeBlock;
 	}
 
-	//void SetFreeBlock(PageHeader* curPage, void *p)	// в функцию передается текущая страница, в которой находится указатель и сам указатель
 	void SetFreeBlock(void *p)
 	{
 		auto curPage = mainPage;
@@ -183,19 +153,13 @@ public:
 				curPage = curPage->nextPage;
 			}
 		}
-		//auto currentBlockindex = ((char*)mainPage->headFL - (char*)mainPage) / blockSize - 1; // расчет индекса текущего свободного элемента
-		//mainPage->headFL = (BlockHeader*)((char*)p - sizeof(int));
-		//mainPage->headFL->nextFreeBlockIndex = currentBlockindex;
-		
-		//auto currentBlockindex = ((char*)curPage->headFL - (char*)curPage) / blockSize - 1;	// расчет индекса текущего свободного элемента
-		//curPage->headFL = (BlockHeader*)((char*)p - sizeof(int));
-		//curPage->headFL->nextFreeBlockIndex = currentBlockindex;
 	}
 
 	PageHeader* AddNewPage()	//выделение новой страницы
 	{
 		auto newPage = (PageHeader*)VirtualAlloc(NULL, PAGESIZE, MEM_COMMIT, PAGE_READWRITE); //инициализирует страницу 
 		isInit = true; // страница выделена, аллокатор проинициализирован
+
 #ifdef _DEBUG
 		assert(newPage != NULL);	// проверка на инициализацию страницы
 		assert(isInit);
@@ -213,16 +177,13 @@ public:
 			temp->nextFreeBlockIndex = i;
 			i++;
 			temp = (BlockHeader*)((char*)temp + blockSize);
-			//blocksCount++; // подсчет количества блоков всего
 		}
 		temp->nextFreeBlockIndex = -1; // последний блок не имеет следующего
-		//blocksCount++;
 
 #ifdef _DEBUG
 		blocksCount += i; // количество блоков в аллокаторе всего
 		freeBlocksCount += i; // количество свободных блоков в аллокаторе всего
 #endif//DEBUG
-
 	}
 
 	bool IsAllocatorContainPointer(void* p)
@@ -256,14 +217,12 @@ public:
 		std::cout << "----------------------------------- \n";
 		std::cout << "FSAx" << blockSize << " busy blocks: \n";
 		auto currentPage = mainPage;
-		//auto currentBlock = (BlockHeader*)((char*)currentPage);
 		auto currentBlock = (BlockHeader*)((char*)currentPage + blockSize);
 		while (currentPage != nullptr)
 		{
 			while (currentBlock->nextFreeBlockIndex != -1)
 			{
 				auto head = currentPage->headFL;
-				//currentBlock = (BlockHeader*)((char*)currentBlock + blockSize);
 				bool isBusy = true;
 				while (head != nullptr &&  head->nextFreeBlockIndex != -1)
 				{
@@ -283,7 +242,6 @@ public:
 		}	
 	}
 #endif//DEBUG	
-
 };
 
 class CoalesceAllocator
@@ -338,6 +296,7 @@ public:
 		mainPage->headFL = (BlockHeader*)((char*)mainPage + sizeof(PageHeader));	// смещение указателя на первый свободный блок (сдвиг на велечину заголовка страницы)	
 		mainPage->headFL->blockSize = pageSize - sizeof(PageHeader); // размер первого блока с учетом метаданных блока и без учета заголовка страницы
 		mainPage->headFL->isFree = true;
+
 #ifdef _DEBUG
 		blocksCount++;
 		freeBlocksCount++;
@@ -401,11 +360,8 @@ public:
 		auto currentFreeBlock = page->headFL;
 		while (currentFreeBlock != nullptr) // ищем блок до тех пор, пока не достигнем конца фри-листа
 		{
-	/*		auto test1 = currentFreeBlock->blockSize;
-			auto test2 = dataSize + sizeof(BlockHeader);*/
 			if (currentFreeBlock->blockSize > dataSize + sizeof(BlockHeader)) //если данные помещаются в блок памяти c запасом под заголовок
 			{
-				//freeBlock = (char*)currentFreeBlock;	//адрес возвращаемого пустого блока
 				//разделение блока
 				auto newBlock = (BlockHeader*)((char*)currentFreeBlock + sizeof(BlockHeader) + dataSize); // выделяем новый блок (делим текущий)
 				newBlock->nextBlock = currentFreeBlock->nextBlock; // для нового блока следующим становится следующий для текущего
@@ -433,16 +389,17 @@ public:
 				currentFreeBlock->isFree = false; // блок становится занятым (зарезервированым)
 				newBlock->isFree = true; //новый блок свободен
 
-				///////////////////////
 				if (newBlock->prevFreeBlock == nullptr) // если новый элемент находится в голове/
 				{
 					page->headFL = newBlock; //переопределяем голову в новый, образовавшийся в ходе разделения блок
 				}
 
 				returnedFreeBlock = (char*)currentFreeBlock + sizeof(BlockHeader);//возвращемый блок без служебной инфы
+
 #ifdef _DEBUG
 				blocksCount++; // добавляем новый блок
 #endif//DEBUG
+				
 				break;
 			}
 			else // если данные не помещаются в блок
@@ -451,53 +408,12 @@ public:
 			}
 		}
 		return returnedFreeBlock; 
-		//void* freeBlock = nullptr;
-		//auto currentFreeBlock = page->headFL;
-		//while (currentFreeBlock != nullptr) // ищем блок до тех пор, пока не достигнем конца фри-листа
-		//{
-		//	if (currentFreeBlock->blockSize - sizeof(BlockHeader) > dataSize + sizeof(BlockHeader)) //если данные помещаются в блок памяти c запасом под заголовок
-		//	{
-		//		freeBlock = (char*)currentFreeBlock + sizeof(BlockHeader);	//адрес возвращаемого пустого блока (часть блока с данными)
-		//		auto newBlock = (BlockHeader*)((char*)freeBlock + dataSize); // выделяем новый блок (делим текущий)
-		//		newBlock->nextBlock = currentFreeBlock->nextBlock; // для нового блока следующим становится следующий для текущего
-		//		newBlock->nextFreeBlock = currentFreeBlock->nextFreeBlock; // для нового блока запоминаем следующий свободный блок
-		//		newBlock->prevFreeBlock = currentFreeBlock->prevFreeBlock;
-		//		newBlock->nextFreeBlock->prevFreeBlock = newBlock;
-		//		newBlock->blockSize = currentFreeBlock->blockSize - dataSize;
-		//		currentFreeBlock->nextBlock = newBlock; //запоминаем следующий блок для текущего
-		//		currentFreeBlock->isFree = false; // блок становится занятым (зарезервированым)
-		//		currentFreeBlock->prevFreeBlock->nextFreeBlock = newBlock; //установка следующего блока для предыдущего свободного блока
-		//		currentFreeBlock->prevFreeBlock = nullptr;
-		//		currentFreeBlock->nextFreeBlock = nullptr;
-		//		
-		//		currentFreeBlock->blockSize = dataSize + sizeof(BlockHeader); // запоминаем новый размер текущей ячейки
-		//		//prev для текущего блока остается неизменным
-		//		newBlock->prevBlock = currentFreeBlock; //запоминаем предыдущий блок для следующего		
-		//		newBlock->isFree = true; //новый блок свободен
-		//		
-		//		if (newBlock->nextFreeBlock != nullptr)
-		//		{
-		//			page->headFL = newBlock; //переопределяем голову в новый, образовавшийся в ходе разделения блок
-		//		}
-		//		
-		//		
-		//	}
-		//	else // если данные не помещаются в блок
-		//	{
-		//		currentFreeBlock = currentFreeBlock->nextFreeBlock; //переходим к следующему блоку в списке
-		//	}
-		//}		
-		//return freeBlock;
 	}
 
 	void* GetFreeBlock(size_t dataSize) //dataSize - объем хранимых данных, передаваемый в аллок
 	{
 		auto currentPage = mainPage; // запоминаем текущую страницу начиная с главной	
 
-		//while (currentPage->headFL == nullptr) //ищем страницу со свободными блоками
-		//{
-		//	currentPage = currentPage->nextPage; // если в этой странице нет свободных блоков, переходим на следующую
-		//}
 		void* currentFreeBlock;
 		while (true)
 		{	
@@ -515,6 +431,7 @@ public:
 					newPage->headFL->blockSize = pageSize - sizeof(PageHeader);
 					currentPage->nextPage = newPage; //записываем новую страницу в next для текущей страницы	
 					currentPage = newPage; // переходим в новую страницу и ищем там
+
 #ifdef _DEBUG
 					blocksCount++; //
 					freeBlocksCount++; // добавляем свободный блок
@@ -524,47 +441,9 @@ public:
 			else
 			{
 				break;
-			}
-				
+			}				
 		}
-
 		return currentFreeBlock;
-
-		//if (currentPage->headFL->blockSize - sizeof(BlockHeader) > dataSize + sizeof(BlockHeader)) //если данные помещаются в блок памяти c запасом под заголовок
-		//{
-		//	currentFreeBlock = (char*)currentPage->headFL + sizeof(BlockHeader);	//адрес текущего пустого блока (часть с данными в блоке)
-		//	auto tmp = (BlockHeader*)((char*)currentFreeBlock + dataSize); // выделяем новый блок (делим текущий)
-		//	currentPage->headFL->nextBlock = tmp; //запоминаем следующий блок для текущего
-		//	currentPage->headFL = tmp; //переопределяем голову		
-		//	
-		//	//if (currentPage->headFL->nextFreeBlock == nullptr) // если у текущего элемента нет следующего свободного
-		//	//{
-		//	//	currentPage->headFL = tmp; //переопределяем голову		
-		//	//}
-		//	//else
-		//	//{
-		//	//	currentPage->headFL = currentPage->headFL->nextFreeBlock;
-		//	//}		
-		//}
-		//else if(currentPage->headFL->nextFreeBlock != nullptr)// если данные не помещаются в блок
-		//{
-		//	currentPage->headFL = currentPage->headFL->nextFreeBlock;
-		//}
-
-		//
-		//if (currentNextIndex > 0)
-		//{
-		//	currentPage->headFL = (BlockHeader*)((char*)currentPage + (currentNextIndex * blockSize) + blockSize);// переход на следующий свободный блок по его индексу (указатель без учета индекса след эл.)		
-		//}
-		//else
-		//{
-		//	auto newPage = AddNewPage();											//добавляем новую страницу
-		//	newPage->headFL = (BlockHeader*)((char*)newPage + blockSize);			//добавляем голову списка в новую страницу
-		//	BlockHeadersInit(newPage);												//инициализируем блоки в новой странице
-		//	currentPage->nextPage = newPage;										//записываем новую страницу в next для текущей страницы		
-		//	currentPage->headFL = nullptr;
-		//}
-		//return currentFreeBlock;
 	}
 
 	void SetFreeBlock(PageHeader* page, void *p) //page это страница в которой был найден указатель
@@ -581,6 +460,7 @@ public:
 			leftBlock->blockSize += currentBlock->blockSize;
 			currentBlock = leftBlock;
 			currentBlock->isFree = true;
+
 #ifdef _DEBUG
 			blocksCount--; // уменьшение количества блоков т.к. блоки объединяются
 			if (currentBlock->nextBlock != nullptr && currentBlock->nextBlock->isFree == true)
@@ -603,6 +483,7 @@ public:
 				currentPage->headFL = currentBlock;
 			}
 			currentBlock->isFree = true;
+
 #ifdef _DEBUG
 			blocksCount--; // уменьшение количества блоков т.к. блоки объединяются
 #endif//DEBUG
@@ -619,36 +500,16 @@ public:
 			currentBlock->prevFreeBlock = nullptr;
 			currentPage->headFL = currentBlock;
 			currentBlock->isFree = true;
+
 #ifdef _DEBUG
 			freeBlocksCount++; // увеличение количества свободных блоков
 #endif//DEBUG
 		}		
 	}
 
-	size_t GetPageSize()
-	{
-		return pageSize;
-	}
-
-	//bool IsAllocatorContainPointer(void* p)
-	//{
-	//	auto currentPage = mainPage;
-	//	bool isContaine = false;
-	//	while (currentPage != nullptr)
-	//	{
-	//		if ((char*)p > (char*)currentPage && (char*)p < (char*)currentPage + pageSize)
-	//		{
-	//			isContaine = true;
-	//		}
-	//		currentPage = currentPage->nextPage;
-	//	}
-	//	return isContaine;
-	//}
-
 	PageHeader* IsAllocatorContainPointer(void* p) // определяет, находится ли указатель в данном аллокаторе и если да, то возвращет страницу, в которой он находится
 	{
 		auto currentPage = mainPage;
-		//bool isContaine = false;
 		while (currentPage != nullptr)
 		{
 			if ((char*)p > (char*)currentPage && (char*)p < (char*)currentPage + pageSize)
@@ -686,31 +547,7 @@ public:
 				currentBlock = currentBlock->nextBlock;
 			}
 			currentPage = currentPage->nextPage;
-		}
-		//while (currentPage != nullptr)
-		//{
-		//	while (currentBlock != nullptr)
-		//	{
-		//		auto head = currentPage->headFL;
-		//		//currentBlock = currentBlock->nextBlock;
-		//		bool isBusy = true;
-		//		//while (head != nullptr &&  head->nextFreeBlock != nullptr)
-		//		while (head != nullptr)
-		//		{
-		//			if (head != currentBlock)
-		//				head = head->nextFreeBlock;
-		//			else
-		//			{
-		//				isBusy = false;
-		//				break;
-		//			}
-		//		}
-		//		currentBlock = currentBlock->nextBlock;
-		//		if (isBusy == true)
-		//			std::cout << "block: " << currentBlock << "; size: " << currentBlock->blockSize << "\n";
-		//	}
-		//	currentPage = currentPage->nextPage;
-		//}
+		}		
 	}
 #endif//DEBUG	
 };
@@ -734,8 +571,6 @@ public:
 		size_t OS_blockSize; //размер текущего блока
 	};
 	PageHeader* OS_mainPage = nullptr; //страница запрошенная непосредственно у ОС
-	//LPVOID OS_mainPage = NULL; //страница запрошенная непосредственно у ОС
-
 
 #ifdef _DEBUG
 	int OS_blockCount;
@@ -751,10 +586,10 @@ public:
 						coalAlloc()
 	{
 		isInit = false;	// аллокатор не инициализирован
+
 #ifdef _DEBUG
 		OS_blockCount = 0;
-#endif//DEBUG
-		
+#endif//DEBUG	
 	}
 
 	virtual ~MemoryAllocator() 
@@ -763,12 +598,6 @@ public:
 		{
 			Destroy();
 		}
-
-		//OS_mainPage = VirtualAlloc(
-		//	OS_mainPage,
-		//	PAGESIZE,
-		//	MEM_RESERVE,			//резервирует память
-		//	PAGE_READWRITE);
 	}
 
 	virtual void Init()			//Выполняет инициализацию аллокатора, запрашивая необходимые страницы памяти у ОС
@@ -781,13 +610,7 @@ public:
 		alloc256.InitFSA();
 		alloc512.InitFSA();
 		////////////////////
-		coalAlloc.InitCA();
-		
-		//OS_mainPage = VirtualAlloc(
-		//	NULL,
-		//	PAGESIZE,
-		//	MEM_COMMIT,			//инициализирует страницу в ранее зарезервированную область
-		//	PAGE_READWRITE);
+		coalAlloc.InitCA();	
 
 		isInit = true; //аллокатор проинициализирован
 	}
@@ -810,17 +633,14 @@ public:
 #ifdef _DEBUG
 			OS_blockCount = 0;
 #endif//DEBUG
+
 			isInit = false; //аллокатор деинициализирован
 		}		
 	}
 
 	virtual void* Alloc(size_t size)
 	{
-		//if (isInit == false) // если аллокаторы не были проинициализированны 
-		//{
 		assert(isInit);
-			//return nullptr;
-		//}
 
 		size_t FSA_metaDataSize = 1 * sizeof(int); // размер метаданных в каждом блоке для FSA аллокатора
 		size_t CA_metaDataSize = sizeof(CoalesceAllocator::BlockHeader); // размер метаданных в блоке для CA аллокатора
@@ -886,15 +706,14 @@ public:
 				currentPage = currentPage->OS_nextPage;
 			}
 			currentPage = newPage;
-			currentPage->OS_blockSize = size;
-			//auto newPage = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);		
-			//OS_mainPage = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);			
+			currentPage->OS_blockSize = size;		
+
 #ifdef _DEBUG
 			OS_blockCount++;
 			currentAllocatorType = OS;
-			//assert(OS_mainPage != NULL);	// проверка на инициализацию страницы
 			assert(newPage != nullptr);	// проверка на инициализацию страницы
 #endif//DEBUG	
+
 			return (char*)currentPage + sizeof(PageHeader);
 		}
 	}
@@ -988,52 +807,14 @@ public:
 			}
 
 			bool isReleased = VirtualFree((LPVOID)p, 0, MEM_RELEASE);
+
 #ifdef _DEBUG
 			OS_blockCount--;
 			currentAllocatorType = OS;
 			assert(isReleased);  // проверка на освобождение
 #endif // DEBUG	
 		}
-
-
-//		if ((char*)p > (char*)alloc16.mainPage && (char*)p < (char*)alloc16.mainPage + PAGESIZE)
-//		{
-//			alloc16.SetFreeBlock(p);
-//		}
-//		else if ((char*)p > (char*)alloc32.mainPage && (char*)p < (char*)alloc32.mainPage + PAGESIZE)
-//		{
-//			alloc32.SetFreeBlock(p);
-//		}
-//		else if ((char*)p > (char*)alloc64.mainPage && (char*)p < (char*)alloc64.mainPage + PAGESIZE)
-//		{
-//			alloc64.SetFreeBlock(p);
-//		}
-//		else if ((char*)p > (char*)alloc128.mainPage && (char*)p < (char*)alloc128.mainPage + PAGESIZE)
-//		{
-//			alloc128.SetFreeBlock(p);
-//		}
-//		else if ((char*)p > (char*)alloc256.mainPage && (char*)p < (char*)alloc256.mainPage + PAGESIZE)
-//		{
-//			alloc256.SetFreeBlock(p);
-//		}
-//		else if ((char*)p > (char*)alloc512.mainPage && (char*)p < (char*)alloc512.mainPage + PAGESIZE)
-//		{
-//			alloc512.SetFreeBlock(p);
-//		}
-//		else if ((char*)p > (char*)coalAlloc.mainPage && (char*)p < (char*)coalAlloc.mainPage + coalAlloc.GetPageSize())
-//		{
-//			coalAlloc.SetFreeBlock(p);
-//		}
-//		else
-//		{
-//			bool isReleased = VirtualFree((LPVOID)p, 0, MEM_RELEASE);
-//
-//#ifdef _DEBUG
-//			assert(isReleased);  // проверка на освобождение
-//#endif // DEBUG	
-//		}
 	}
-
 
 #ifdef _DEBUG
 	AllocatorType GetCurrentAllocatorType()
@@ -1055,7 +836,6 @@ public:
 
 	virtual void DumpStat() const
 	{
-		//
 		std::cout << "----------------------------------- \n";
 		std::cout << "FSAx16 bloks count: " << alloc16.GetAllBlocksCount() << "; free bloks count: " << alloc16.GetFreeBlocksCount() << std::endl;
 		std::cout << "FSAx32 bloks count: " << alloc32.GetAllBlocksCount() << "; free bloks count: " << alloc32.GetFreeBlocksCount() << std::endl;
@@ -1069,8 +849,6 @@ public:
 
 	virtual void DumpBlocks() const
 	{
-		//
-		//std::cout << "----------------------------------- \n";
 		alloc16.PrintAllBusyBlocks();
 		alloc32.PrintAllBusyBlocks();
 		alloc64.PrintAllBusyBlocks();
@@ -1081,7 +859,4 @@ public:
 		PrintAllOSBusyBlocks();
 	}
 #endif // DEBUG	
-
 };
-
-
